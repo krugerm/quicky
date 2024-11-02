@@ -1,21 +1,21 @@
 #!/usr/bin/env node
-import { Command } from "commander";
-import inquirer from "inquirer";
-import { execSync } from "child_process";
-import simpleGit from "simple-git";
-import fs from "fs-extra";
+import axios from "axios";
 import chalk from "chalk";
+import { execSync } from "child_process";
+import Table from "cli-table3";
+import { Command } from "commander";
+import { formatDistanceToNow } from "date-fns";
+import fs from "fs-extra";
+import inquirer from "inquirer";
+import latestVersion from "latest-version";
 import { createSpinner } from "nanospinner";
+import net from "net";
 import os from "os";
 import path from "path";
-import Table from "cli-table3";
-import net from "net";
-import { v4 as uuidv4 } from "uuid";
-import { formatDistanceToNow } from "date-fns";
-import latestVersion from "latest-version";
 import semver from "semver";
+import simpleGit from "simple-git";
 import { fileURLToPath } from "url";
-import axios from "axios";
+import { v4 as uuidv4 } from "uuid";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -38,18 +38,13 @@ async function checkForUpdates() {
   try {
     const latest = await latestVersion("quicky");
     if (semver.gt(latest, packageJson.version)) {
-      console.log(
-        `\n🚀 A new version of Quicky (v${chalk.bold.blue(
-          latest
-        )}) is available!`
-      );
+      console.log(`\n🚀 A new version of Quicky (v${chalk.bold.blue(latest)}) is available!`);
 
       const { shouldUpgrade } = await inquirer.prompt([
         {
           type: "confirm",
           name: "shouldUpgrade",
-          message:
-            "Would you like to update quicky to the latest version? Your configurations will be preserved.",
+          message: "Would you like to update quicky to the latest version? Your configurations will be preserved.",
           default: true,
         },
       ]);
@@ -57,9 +52,7 @@ async function checkForUpdates() {
       if (shouldUpgrade) {
         updateCLI();
       } else {
-        console.log(
-          chalk.yellow("You can upgrade later by running 'quicky upgrade'.")
-        );
+        console.log(chalk.yellow("You can upgrade later by running 'quicky upgrade'."));
       }
     }
   } catch (error) {
@@ -141,9 +134,7 @@ async function setupDomain(domain, port) {
   // Check if domain is pointing to the server's IP address using dig
   const checkDomainPointing = async (domain) => {
     let digResult = "";
-    const spinner = createSpinner(
-      `Checking if ${domain} points to this server...`
-    ).start();
+    const spinner = createSpinner(`Checking if ${domain} points to this server...`).start();
     while (!digResult) {
       digResult = execSync(`dig +short ${domain}`).toString().trim();
       if (!digResult) {
@@ -164,26 +155,14 @@ async function setupDomain(domain, port) {
   // Check if the domain already exists in Nginx configuration
   if (fs.existsSync(nginxConfigPath) || fs.existsSync(nginxSymlinkPath)) {
     // Check if the domain exists in the config.json
-    const domainExistsInConfig = (config.domains || []).some(
-      (d) => d.domain === domain
-    );
+    const domainExistsInConfig = (config.domains || []).some((d) => d.domain === domain);
     if (!domainExistsInConfig) {
-      log(
-        chalk.yellow(
-          `Warning: Domain ${domain} configuration files exist but domain is not in config.json.`
-        )
-      );
+      log(chalk.yellow(`Warning: Domain ${domain} configuration files exist but domain is not in config.json.`));
       log(`Overriding the existing configuration files for ${domain}.`);
     } else {
       log(chalk.red(`Error: Domain ${domain} already exists.`));
-      log(
-        `Please remove the existing configuration first or choose a different domain.`
-      );
-      log(
-        `You can use the ${chalk.green(
-          "quicky domains"
-        )} command to manage domains.`
-      );
+      log(`Please remove the existing configuration first or choose a different domain.`);
+      log(`You can use the ${chalk.green("quicky domains")} command to manage domains.`);
       return;
     }
   }
@@ -297,14 +276,11 @@ async function setupDomain(domain, port) {
     });
   } finally {
     try {
-      execSync(
-        `sudo certbot --nginx -d ${domain} --non-interactive --agree-tos --email ${config.email}`,
-        { stdio: "inherit" }
-      );
+      execSync(`sudo certbot --nginx -d ${domain} --non-interactive --agree-tos --email ${config.email}`, {
+        stdio: "inherit",
+      });
     } catch (error) {
-      console.error(
-        chalk.red(`Failed to obtain SSL certificate: ${error.message}`)
-      );
+      console.error(chalk.red(`Failed to obtain SSL certificate: ${error.message}`));
       process.exit(1);
     }
   }
@@ -317,16 +293,12 @@ async function setupWebhookServer() {
     {
       type: "input",
       name: "webhookUrl",
-      message:
-        "Enter the URL where the webhook will be received (e.g., quicky.example.com):",
+      message: "Enter the URL where the webhook will be received (e.g., quicky.example.com):",
       validate: (input) => {
         if (input.trim() === "") {
           return "URL is required.";
         }
-        if (
-          config.domains &&
-          config.domains.some((d) => d.domain === input.trim())
-        ) {
+        if (config.domains && config.domains.some((d) => d.domain === input.trim())) {
           return "This domain is already in use. Please enter a different URL.";
         }
         return true;
@@ -375,20 +347,13 @@ async function setupWebhookServer() {
 
   // Check if the webhook directory already exists and is not empty
   if (fs.existsSync(webhookPath) && fs.readdirSync(webhookPath).length > 0) {
-    log(
-      chalk.yellow(
-        `Directory ${webhookPath} already exists and is not empty. Deleting...`
-      )
-    );
+    log(chalk.yellow(`Directory ${webhookPath} already exists and is not empty. Deleting...`));
 
     // Stop and delete the PM2 instance if it exists
     try {
-      execSync(
-        `pm2 stop quicky-webhook-server && pm2 del quicky-webhook-server`,
-        {
-          stdio: "inherit",
-        }
-      );
+      execSync(`pm2 stop quicky-webhook-server && pm2 del quicky-webhook-server`, {
+        stdio: "inherit",
+      });
     } catch (error) {
       log(chalk.red(`Failed to stop/delete PM2 instance: ${error.message}`));
     }
@@ -441,9 +406,7 @@ async function setupWebhookServer() {
           );
           console.log(`Webhook updated for project: ${project.repo}`);
         } catch (error) {
-          console.error(
-            `Error updating webhook for project ${project.repo}: ${error.message}`
-          );
+          console.error(`Error updating webhook for project ${project.repo}: ${error.message}`);
         }
       }
     }
@@ -451,15 +414,9 @@ async function setupWebhookServer() {
 
   try {
     // Start the webhook server with PM2
-    execSync(
-      `pm2 start ${path.join(
-        webhookPath,
-        "index.js"
-      )} --name "quicky-webhook-server"`,
-      {
-        stdio: "inherit",
-      }
-    );
+    execSync(`pm2 start ${path.join(webhookPath, "index.js")} --name "quicky-webhook-server"`, {
+      stdio: "inherit",
+    });
   } catch (error) {
     if (error.message.includes("Script already launched")) {
       // If the script is already running, attempt to restart it
@@ -468,10 +425,7 @@ async function setupWebhookServer() {
           stdio: "inherit",
         });
       } catch (restartError) {
-        console.error(
-          "Failed to restart the webhook server:",
-          restartError.message
-        );
+        console.error("Failed to restart the webhook server:", restartError.message);
         throw restartError; // Re-throw the error after logging
       }
     } else {
@@ -489,27 +443,14 @@ async function setupWebhookServer() {
   };
   saveConfig(config);
 
-  log(
-    chalk.green(
-      `Webhook server set up and running at https://${webhookUrl}/webhook`
-    )
-  );
+  log(chalk.green(`Webhook server set up and running at https://${webhookUrl}/webhook`));
 }
 
 // Function to set up a webhook on a repository to be used during deployment
 async function setupWebhook(repo) {
   // check if the webhook config is already set up in the config file
-  if (
-    !config.webhook ||
-    !config.webhook.webhookUrl ||
-    !config.webhook.webhookPort ||
-    !config.webhook.secret
-  ) {
-    log(
-      chalk.yellow(
-        "Webhook server is not fully configured. Please set up the webhook server first."
-      )
-    );
+  if (!config.webhook || !config.webhook.webhookUrl || !config.webhook.webhookPort || !config.webhook.secret) {
+    log(chalk.yellow("Webhook server is not fully configured. Please set up the webhook server first."));
 
     const { confirmWebhookSetup } = await inquirer.prompt([
       {
@@ -541,15 +482,11 @@ async function setupWebhook(repo) {
 
   // Create the webhook on the user's repository
   try {
-    const response = await axios.post(
-      `https://api.github.com/repos/${repo}/hooks`,
-      webhookConfig,
-      {
-        headers: {
-          Authorization: `Bearer ${config.github.access_token}`,
-        },
-      }
-    );
+    const response = await axios.post(`https://api.github.com/repos/${repo}/hooks`, webhookConfig, {
+      headers: {
+        Authorization: `Bearer ${config.github.access_token}`,
+      },
+    });
     console.log(`Webhook created: ${response.data.id}`);
     return response.data.id; // Return the webhook ID
   } catch (error) {
@@ -561,14 +498,11 @@ async function setupWebhook(repo) {
 // Function to remove a webhook from a repo to be used during project deletion
 async function removeWebhook(repo, webhookId) {
   try {
-    await axios.delete(
-      `https://api.github.com/repos/${repo}/hooks/${webhookId}`,
-      {
-        headers: {
-          Authorization: `Bearer ${config.github.access_token}`,
-        },
-      }
-    );
+    await axios.delete(`https://api.github.com/repos/${repo}/hooks/${webhookId}`, {
+      headers: {
+        Authorization: `Bearer ${config.github.access_token}`,
+      },
+    });
     console.log(`Webhook ${webhookId} removed.`);
     return true;
   } catch (error) {
@@ -637,11 +571,7 @@ async function updateProject(project, promptEnv = false) {
           ]);
 
           if (addEnv) {
-            fs.writeFileSync(
-              envFilePath,
-              "# Add your environment variables below\n",
-              { flag: "wx" }
-            );
+            fs.writeFileSync(envFilePath, "# Add your environment variables below\n", { flag: "wx" });
             execSync(`nano ${envFilePath}`, { stdio: "inherit" });
           }
         }
@@ -649,16 +579,14 @@ async function updateProject(project, promptEnv = false) {
 
       // Install dependencies, build the project, and restart the PM2 instance
       const packageManager = config.packageManager || "npm";
-      const installCommand =
-        packageManager === "bun" ? "bun install" : "npm install";
+      const installCommand = packageManager === "bun" ? "bun install" : "npm install";
       execSync(`cd ${repoPath}/${project.root_dir} && ${installCommand}`, {
         stdio: "inherit",
       });
 
       await sleep(1000);
       spinner.update({ text: " Building the project...\n" });
-      const buildCommand =
-        packageManager === "bun" ? "bun run build" : "npm run build";
+      const buildCommand = packageManager === "bun" ? "bun run build" : "npm run build";
       execSync(`cd ${repoPath}/${project.root_dir} && ${buildCommand}`, {
         stdio: "inherit",
       });
@@ -678,7 +606,9 @@ async function updateProject(project, promptEnv = false) {
       } catch (error) {
         // If it doesn't exist, start it on its port
         execSync(
-          `cd ${repoPath}/${project.root_dir} && pm2 start npm --name "${project.app_name || project.repo}" -- start -- --port ${project.port}`,
+          `cd ${repoPath}/${project.root_dir} && pm2 start npm --name "${
+            project.app_name || project.repo
+          }" -- start -- --port ${project.port}`,
           {
             stdio: "inherit",
           }
@@ -691,9 +621,7 @@ async function updateProject(project, promptEnv = false) {
       saveConfig(config);
 
       spinner.success({
-        text: ` Project ${chalk.green.bold(
-          project.repo
-        )} updated successfully.`,
+        text: ` Project ${chalk.green.bold(project.repo)} updated successfully.`,
       });
     } catch (error) {
       spinner.error({
@@ -715,66 +643,24 @@ function help() {
 `;
 
   log(chalk.blue(rabbit)); // Change color to whatever fits your style
-  log(
-    `${chalk.hex("#fd6d4c").bold("Quicky")}${chalk.hex("#f39549")(
-      " - A CLI tool to deploy Next.js projects"
-    )}`
-  );
+  log(`${chalk.hex("#fd6d4c").bold("Quicky")}${chalk.hex("#f39549")(" - A CLI tool to deploy Next.js projects")}`);
   log("");
   log("Usage:");
   // use the chalk package to colorize the output
-  log(
-    `${chalk.blue("  quicky")} ${chalk.hex("#FFA500")(
-      "<command>"
-    )} ${chalk.green("[options]")}`
-  );
+  log(`${chalk.blue("  quicky")} ${chalk.hex("#FFA500")("<command>")} ${chalk.green("[options]")}`);
   log("");
   log("Commands:");
-  log(
-    `  ${chalk
-      .hex("#cea9fe")
-      .bold(
-        "init"
-      )}      Save your GitHub account details and install dependencies\n`
-  );
+  log(`  ${chalk.hex("#cea9fe").bold("init")}      Save your GitHub account details and install dependencies\n`);
   log(`  ${chalk.blue.bold("deploy")}    Deploy a Next.js project from GitHub`);
-  log(
-    `  ${chalk.blue.bold(
-      "list"
-    )}      List the current configuration and associated PM2 instances`
-  );
-  log(
-    `  ${chalk.blue.bold(
-      "manage"
-    )}    Start, stop, restart, update, or delete a project \n`
-  );
-  log(
-    `  ${chalk.blue.bold(
-      "update"
-    )}    Update a project by its PID, primarily used by the webhook server\n`
-  );
-  log(
-    `  ${chalk.cyanBright.bold(
-      "domains"
-    )}   Manage domains and subdomains for the projects`
-  );
-  log(
-    `  ${chalk.cyanBright.bold(
-      "webhooks"
-    )}  Manage the webhook server for your projects`
-  );
+  log(`  ${chalk.blue.bold("list")}      List the current configuration and associated PM2 instances`);
+  log(`  ${chalk.blue.bold("manage")}    Start, stop, restart, update, or delete a project \n`);
+  log(`  ${chalk.blue.bold("update")}    Update a project by its PID, primarily used by the webhook server\n`);
+  log(`  ${chalk.cyanBright.bold("domains")}   Manage domains and subdomains for the projects`);
+  log(`  ${chalk.cyanBright.bold("webhooks")}  Manage the webhook server for your projects`);
   log("");
   log(`  ${chalk.hex("#fe64fa").bold("install")}   Install quicky globally`);
-  log(
-    `  ${chalk
-      .hex("#fe64fa")
-      .bold("upgrade")}   Upgrade quicky to the latest version`
-  );
-  log(
-    `  ${chalk
-      .hex("#fe64fa")
-      .bold("uninstall")} Uninstall the CLI tool globally`
-  );
+  log(`  ${chalk.hex("#fe64fa").bold("upgrade")}   Upgrade quicky to the latest version`);
+  log(`  ${chalk.hex("#fe64fa").bold("uninstall")} Uninstall the CLI tool globally`);
   log("");
   log("Options:");
   log("  --help    Display help for the command");
@@ -783,15 +669,9 @@ function help() {
   log("For more information, visit https://quicky.dev");
 }
 
-program
-  .version(
-    `${packageJson.version}`,
-    "-v, --version",
-    "Output the current version of Quicky"
-  )
-  .action(async () => {
-    help();
-  });
+program.version(`${packageJson.version}`, "-v, --version", "Output the current version of Quicky").action(async () => {
+  help();
+});
 
 program.option("-h, --help", "Display help for the command").action(() => {
   help();
@@ -815,11 +695,7 @@ program
   .action(async () => {
     try {
       log(chalk.red.bold("\n⚠️  WARNING: This action is irreversible!"));
-      log(
-        chalk.red.bold(
-          "All projects and configurations will be permanently deleted."
-        )
-      );
+      log(chalk.red.bold("All projects and configurations will be permanently deleted."));
       const { confirmUninstall } = await inquirer.prompt([
         {
           type: "confirm",
@@ -846,11 +722,7 @@ program
             });
           }
 
-          log(
-            chalk.green(
-              "All PM2 instances managed by Quicky have been stopped and deleted."
-            )
-          );
+          log(chalk.green("All PM2 instances managed by Quicky have been stopped and deleted."));
         } catch (error) {
           log(chalk.red(`Failed to stop PM2 instances: ${error.message}`));
         }
@@ -868,15 +740,9 @@ program
               execSync(`sudo rm ${domainSymlinkPath}`, { stdio: "inherit" });
             }
           });
-          log(
-            chalk.green(
-              "Nginx configurations for all domains managed by Quicky have been deleted."
-            )
-          );
+          log(chalk.green("Nginx configurations for all domains managed by Quicky have been deleted."));
         } catch (error) {
-          log(
-            chalk.red(`Failed to delete Nginx configurations: ${error.message}`)
-          );
+          log(chalk.red(`Failed to delete Nginx configurations: ${error.message}`));
         }
 
         // Delete the default folder where projects and configurations are stored
@@ -907,10 +773,7 @@ program
   .description("Save your GitHub account details and install dependencies")
   .option("--username <username>", "GitHub username")
   .option("--token <token>", "GitHub personal access token")
-  .option(
-    "--packageManager <packageManager>",
-    "Package manager to use (npm|bun)"
-  )
+  .option("--packageManager <packageManager>", "Package manager to use (npm|bun)")
   .action(async (cmd) => {
     try {
       let { username, token, packageManager } = cmd || config.github || {};
@@ -948,12 +811,9 @@ program
         // Check if the webhook server is already running
         if (config.webhook && config.webhook.pm2Name) {
           try {
-            const pm2Status = execSync(
-              `pm2 describe ${config.webhook.pm2Name}`,
-              {
-                stdio: "pipe",
-              }
-            ).toString();
+            const pm2Status = execSync(`pm2 describe ${config.webhook.pm2Name}`, {
+              stdio: "pipe",
+            }).toString();
 
             if (!pm2Status.includes("online")) {
               log(chalk.yellow("Webhook server is not running. Restarting..."));
@@ -965,11 +825,7 @@ program
               log(chalk.green("Webhook server is already running."));
             }
           } catch (error) {
-            log(
-              chalk.red(
-                `Failed to check or restart webhook server: ${error.message}`
-              )
-            );
+            log(chalk.red(`Failed to check or restart webhook server: ${error.message}`));
             log(chalk.yellow("Attempting to start webhook server..."));
             await setupWebhookServer();
           }
@@ -979,9 +835,7 @@ program
         }
 
         // Check if PM2 is already installed, if not, install it using npm
-        const spinner = createSpinner(
-          "Saving your GitHub account details and installing dependencies..."
-        ).start();
+        const spinner = createSpinner("Saving your GitHub account details and installing dependencies...").start();
         await sleep(1000);
         try {
           execSync("pm2 -v", { stdio: "ignore" });
@@ -1001,15 +855,9 @@ program
           }
         }
 
-        log(
-          `\n📁 Configuration files are stored at: ${chalk.green(configPath)}`
-        );
+        log(`\n📁 Configuration files are stored at: ${chalk.green(configPath)}`);
         log(`📂 Projects will be stored in: ${chalk.green(projectsDir)}`);
-        log(
-          `\n🚀 You can now deploy your Next.js projects using ${chalk.green(
-            "quicky deploy"
-          )}`
-        );
+        log(`\n🚀 You can now deploy your Next.js projects using ${chalk.green("quicky deploy")}`);
 
         // Ask user if they want to deploy a project now
         const { deployNow } = await inquirer.prompt([
@@ -1083,12 +931,9 @@ program
         }
       } else if (action === "Check Status") {
         try {
-          const pm2Status = execSync(
-            `pm2 describe ${config.webhook.pm2Name}`,
-            {
-              stdio: "pipe",
-            }
-          ).toString();
+          const pm2Status = execSync(`pm2 describe ${config.webhook.pm2Name}`, {
+            stdio: "pipe",
+          }).toString();
 
           if (pm2Status.includes("online")) {
             log(chalk.green("Webhook server is running."));
@@ -1096,9 +941,7 @@ program
             log(chalk.red("Webhook server is not running."));
           }
         } catch (error) {
-          log(
-            chalk.red(`Failed to check webhook server status: ${error.message}`)
-          );
+          log(chalk.red(`Failed to check webhook server status: ${error.message}`));
         }
       } else if (action === "Stop") {
         try {
@@ -1221,13 +1064,9 @@ program
       if (existingProject) {
         log(
           chalk.yellowBright(
-            `\nProject ${chalk.bold(
-              repo
-            )} already exists. \nUse the ${chalk.bold(
+            `\nProject ${chalk.bold(repo)} already exists. \nUse the ${chalk.bold(
               "manage"
-            )} command to manage the project or the ${chalk.bold(
-              "list"
-            )} command to view all your deployed projects.\n`
+            )} command to manage the project or the ${chalk.bold("list")} command to view all your deployed projects.\n`
           )
         );
         process.exit(1);
@@ -1263,9 +1102,7 @@ program
               message: `Port ${port} is already in use. Please enter another port:`,
               validate: (input) => {
                 const portNumber = parseInt(input, 10);
-                return Number.isInteger(portNumber) &&
-                  portNumber > 0 &&
-                  portNumber <= 65535
+                return Number.isInteger(portNumber) && portNumber > 0 && portNumber <= 65535
                   ? true
                   : "Please enter a valid port number (1-65535).";
               },
@@ -1285,11 +1122,7 @@ program
       if (fs.existsSync(repoPath) && fs.readdirSync(repoPath).length > 0) {
         const existingProject = config.projects.find((p) => p.repo === repo);
         if (!existingProject) {
-          log(
-            `⚠️  Directory ${chalk
-              .hex("#FFA500")
-              .bold(repoPath)} exists and is not linked to any project.`
-          );
+          log(`⚠️  Directory ${chalk.hex("#FFA500").bold(repoPath)} exists and is not linked to any project.`);
           const { deleteFolder } = await inquirer.prompt([
             {
               type: "confirm",
@@ -1307,9 +1140,7 @@ program
           }
         } else {
           log(
-            `⚠️ Directory ${chalk
-              .hex("#FFA500")
-              .bold(repoPath)} exists and is not empty. Use ${chalk.green(
+            `⚠️ Directory ${chalk.hex("#FFA500").bold(repoPath)} exists and is not empty. Use ${chalk.green(
               "manage"
             )} to manage the project.`
           );
@@ -1318,30 +1149,16 @@ program
       }
 
       if (!config.github || !config.github.access_token) {
-        log(
-          chalk.red(
-            "Error: GitHub access token not found. Please run the init command first."
-          )
-        );
-        log(
-          `You can run the ${chalk.green(
-            "quicky init"
-          )} command to save your GitHub account details.`
-        );
+        log(chalk.red("Error: GitHub access token not found. Please run the init command first."));
+        log(`You can run the ${chalk.green("quicky init")} command to save your GitHub account details.`);
         process.exit(1);
       }
 
-      await git.clone(
-        `https://${config.github.access_token}@github.com/${owner}/${repo}.git`,
-        repoPath
-      );
+      await git.clone(`https://${config.github.access_token}@github.com/${owner}/${repo}.git`, repoPath);
 
       let pid = uuidv4().slice(0, 5);
 
-      pid =
-        config.projects.filter((p) => p.pid === pid).length > 0
-          ? uuidv4().slice(0, 5)
-          : pid;
+      pid = config.projects.filter((p) => p.pid === pid).length > 0 ? uuidv4().slice(0, 5) : pid;
 
       // Prompt user to add a .env file or not
       const { addEnv } = await inquirer.prompt([
@@ -1355,19 +1172,11 @@ program
 
       if (addEnv) {
         const envFilePath = `${projectsDir}/${repo}/.env`;
-        fs.writeFileSync(
-          envFilePath,
-          "# Add your environment variables below\n",
-          { flag: "wx" }
-        );
+        fs.writeFileSync(envFilePath, "# Add your environment variables below\n", { flag: "wx" });
         execSync(`nano ${envFilePath}`, { stdio: "inherit" });
       }
 
-      log(
-        chalk.green(
-          `✔ Project ${chalk.bold(repo)} cloned successfully. Deploying...`
-        )
-      );
+      log(chalk.green(`✔ Project ${chalk.bold(repo)} cloned successfully. Deploying...`));
 
       const packageManager = config.packageManager || "npm";
 
@@ -1393,11 +1202,7 @@ program
         try {
           execSync("npm -v", { stdio: "ignore" });
         } catch (error) {
-          log(
-            chalk.red(
-              "Error: npm is not installed. Please install Node.js to use npm."
-            )
-          );
+          log(chalk.red("Error: npm is not installed. Please install Node.js to use npm."));
           process.exit(1);
         }
       }
@@ -1420,15 +1225,10 @@ program
           execSync("sudo chmod 600 /swapfile", { stdio: "inherit" });
           execSync("sudo mkswap /swapfile", { stdio: "inherit" });
           execSync("sudo swapon /swapfile", { stdio: "inherit" });
-          execSync(
-            "echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab",
-            { stdio: "inherit" }
-          );
+          execSync("echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab", { stdio: "inherit" });
           log(chalk.green("✔ Swap space created and enabled successfully."));
         } catch (error) {
-          console.error(
-            chalk.red(`Failed to create swap space: ${error.message}`)
-          );
+          console.error(chalk.red(`Failed to create swap space: ${error.message}`));
           process.exit(1);
         }
       };
@@ -1437,22 +1237,17 @@ program
         createSwap();
       }
 
-      const installCommand =
-        packageManager === "bun" ? "bun install" : "npm install";
+      const installCommand = packageManager === "bun" ? "bun install" : "npm install";
       const buildCommand = build_cmd || packageManager === "bun" ? "bun run build" : "npm run build";
       const startCommand = `pm2 start npm --name "${app_name || repo}" -- start -- --port ${port}`;
 
       // Install dependencies and build the project
       try {
-        if () {
-        }
         execSync(`cd ${projectsDir}/${repo}/${root_dir} && ${installCommand}`, {
           stdio: "inherit",
         });
       } catch (error) {
-        console.error(
-          chalk.red(`Failed to install dependencies: ${error.message}`)
-        );
+        console.error(chalk.red(`Failed to install dependencies: ${error.message}`));
         process.exit(1);
       }
 
@@ -1461,9 +1256,7 @@ program
           stdio: "inherit",
         });
       } catch (error) {
-        console.error(
-          chalk.red(`Failed to build the project: ${error.message}`)
-        );
+        console.error(chalk.red(`Failed to build the project: ${error.message}`));
         process.exit(1);
       }
 
@@ -1474,11 +1267,7 @@ program
           execSync("npm install -g pm2", { stdio: "inherit" });
         }
       } catch (error) {
-        console.error(
-          chalk.red(
-            "PM2 is not installed. Please install it using `npm install -g pm2`"
-          )
-        );
+        console.error(chalk.red("PM2 is not installed. Please install it using `npm install -g pm2`"));
         process.exit(1);
       }
 
@@ -1554,9 +1343,7 @@ const status = () => {
 
 program
   .command("list")
-  .description(
-    "List the current configuration, associated PM2 instances, and domains"
-  )
+  .description("List the current configuration, associated PM2 instances, and domains")
   .action(() => {
     if (config.projects.length === 0) {
       log(chalk.yellow("No projects found."));
@@ -1566,11 +1353,9 @@ program
     status();
 
     log(
-      `\nTo manage your projects, use the ${chalk.blue(
-        "quicky manage"
-      )} command. You can ${chalk.blue("start")}, ${chalk.blue(
-        "stop"
-      )}, ${chalk.blue("restart")}, ${chalk.blue("update")}, or ${chalk.red(
+      `\nTo manage your projects, use the ${chalk.blue("quicky manage")} command. You can ${chalk.blue(
+        "start"
+      )}, ${chalk.blue("stop")}, ${chalk.blue("restart")}, ${chalk.blue("update")}, or ${chalk.red(
         "delete"
       )} your projects.`
     );
@@ -1627,9 +1412,7 @@ program
             {
               type: "confirm",
               name: "confirmDelete",
-              message: `Are you sure you want to delete the project ${chalk.redBright(
-                selectedProject
-              )}?`,
+              message: `Are you sure you want to delete the project ${chalk.redBright(selectedProject)}?`,
               default: false,
             },
           ]);
@@ -1638,9 +1421,7 @@ program
             const spinner = createSpinner("Deleting the project...").start();
             await sleep(1000);
 
-            const project = config.projects.find(
-              (p) => selectedProject === (p.app_name || p.repo)
-            );
+            const project = config.projects.find((p) => selectedProject === (p.app_name || p.repo));
             if (project) {
               const repoPath = `${projectsDir}/${project.repo}`;
 
@@ -1649,30 +1430,20 @@ program
                 execSync(`pm2 stop ${project.app_name || project.repo}`, { stdio: "ignore" });
                 execSync(`pm2 del ${project.app_name || project.repo}`, { stdio: "ignore" });
               } catch (error) {
-                log(
-                  chalk.yellow(
-                    `\nProject ${project.repo} is not running on PM2. Skipping...`
-                  )
-                );
+                log(chalk.yellow(`\nProject ${project.repo} is not running on PM2. Skipping...`));
               }
 
               // Remove the project directory
               execSync(`rm -rf ${repoPath}`);
 
-              log(
-                chalk.green(`\n✔ Project ${project.app_name || project.repo} deleted successfully.`)
-              );
+              log(chalk.green(`\n✔ Project ${project.app_name || project.repo} deleted successfully.`));
 
               // Remove the project from the configuration file
-              config.projects = config.projects.filter(
-                (p) => (p.app_name || p.repo) !== selectedProject
-              );
+              config.projects = config.projects.filter((p) => (p.app_name || p.repo) !== selectedProject);
 
               // Remove associated domains
               if (config.domains && config.domains.length > 0) {
-                config.domains = config.domains.filter(
-                  (domain) => domain.pid !== project.pid
-                );
+                config.domains = config.domains.filter((domain) => domain.pid !== project.pid);
               }
 
               // Delete the nginx config file and restart nginx
@@ -1693,10 +1464,7 @@ program
 
               // Remove webhook if it exists
               if (project.webhookId) {
-                await removeWebhook(
-                  `${project.owner}/${project.app_name || project.repo}`,
-                  project.webhookId
-                );
+                await removeWebhook(`${project.owner}/${project.app_name || project.repo}`, project.webhookId);
               }
 
               saveConfig(config);
@@ -1721,11 +1489,7 @@ program
           execSync(pm2Command, { stdio: "inherit" });
           log(chalk.green(`Project ${project.app_name || project.repo} ${action}ed successfully.`));
         } catch (error) {
-          console.error(
-            chalk.red(
-              `Failed to ${action} project ${project.app_name || project.repo}: ${error.message}`
-            )
-          );
+          console.error(chalk.red(`Failed to ${action} project ${project.app_name || project.repo}: ${error.message}`));
         }
       }
     } catch (error) {
@@ -1827,9 +1591,7 @@ async function handleAddDomain(projects) {
         validate: (input) => {
           // Basic domain validation
           const domainRegex = /^[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
-          return domainRegex.test(input)
-            ? true
-            : "Please enter a valid domain.";
+          return domainRegex.test(input) ? true : "Please enter a valid domain.";
         },
       },
     ]);
@@ -1857,11 +1619,7 @@ async function handleAddDomain(projects) {
 
     config.domains.push({ pid: projectPid, domain });
     saveConfig(config);
-    log(
-      chalk.green(
-        `Domain ${domain} added successfully to project ${selectedProject.repo}.`
-      )
-    );
+    log(chalk.green(`Domain ${domain} added successfully to project ${selectedProject.repo}.`));
     log(chalk.green(`You can now access your project at https://${domain}`));
     log(
       `Please make sure your domain is pointing to this server's IP address. It may take up to 48 hours for DNS changes to take effect.`
@@ -1889,9 +1647,7 @@ async function handleRemoveDomain(projects) {
       return;
     }
 
-    const projectDomains = config.domains.filter(
-      (d) => d.pid === selectedProject.pid
-    );
+    const projectDomains = config.domains.filter((d) => d.pid === selectedProject.pid);
     if (projectDomains.length === 0) {
       log(chalk.red("Error: Selected project has no associated domains."));
       return;
@@ -1923,11 +1679,7 @@ async function handleRemoveDomain(projects) {
     // Update the config file and remove the domain from the config
     config.domains = config.domains.filter((d) => d.domain !== domain);
     saveConfig(config);
-    log(
-      chalk.green(
-        `Domain ${domain} removed successfully from project ${project}.`
-      )
-    );
+    log(chalk.green(`Domain ${domain} removed successfully from project ${project}.`));
   } catch (error) {
     console.error(chalk.red(`Failed to remove domain: ${error.message}`));
   }
@@ -1942,11 +1694,7 @@ async function handleListDomains(projects) {
     }
 
     const table = new Table({
-      head: [
-        chalk.cyan.bold("Project"),
-        chalk.cyan.bold("Domain"),
-        chalk.cyan.bold("Port"),
-      ],
+      head: [chalk.cyan.bold("Project"), chalk.cyan.bold("Domain"), chalk.cyan.bold("Port")],
       style: {
         head: ["cyan", "bold"],
         border: ["grey"],
@@ -1955,15 +1703,9 @@ async function handleListDomains(projects) {
     });
 
     projects.forEach((project) => {
-      const projectDomains = config.domains.filter(
-        (d) => d.pid === project.pid
-      );
+      const projectDomains = config.domains.filter((d) => d.pid === project.pid);
       projectDomains.forEach((domain) => {
-        table.push([
-          chalk.white(project.repo),
-          chalk.blue(domain.domain),
-          chalk.white(project.port),
-        ]);
+        table.push([chalk.white(project.repo), chalk.blue(domain.domain), chalk.white(project.port)]);
       });
     });
 
@@ -1991,11 +1733,7 @@ program
       }).trim();
 
       if (currentVersion === latestVersion) {
-        console.log(
-          chalk.yellow(
-            `Quicky CLI is already at the latest version (${currentVersion}).`
-          )
-        );
+        console.log(chalk.yellow(`Quicky CLI is already at the latest version (${currentVersion}).`));
         return;
       }
 
@@ -2009,9 +1747,7 @@ program
 
 // Global error handling
 process.on("unhandledRejection", (reason, promise) => {
-  console.error(
-    chalk.red(`Unhandled Rejection at: ${promise}, reason: ${reason}`)
-  );
+  console.error(chalk.red(`Unhandled Rejection at: ${promise}, reason: ${reason}`));
   process.exit(1);
 });
 
