@@ -105,6 +105,9 @@ const updateProjectsConfig = ({
   pid = uuidv4().slice(0, 5),
   owner,
   repo,
+  app_name,
+  root_dir,
+  build_cmd,
   port,
   webhookId,
 }) => {
@@ -112,6 +115,9 @@ const updateProjectsConfig = ({
     pid,
     owner,
     repo,
+    app_name,
+    root_dir,
+    build_cmd,
     port,
     webhookId,
     last_updated: new Date().toISOString(),
@@ -119,8 +125,11 @@ const updateProjectsConfig = ({
   const existing = config.projects.find((p) => p.repo === repo);
 
   if (existing) {
-    existing.port = port;
     existing.owner = owner;
+    existing.app_name = app_name;
+    existing.root_dir = root_dir;
+    existing.build_cmd = build_cmd;
+    existing.port = port;
   } else {
     config.projects.push(project);
   }
@@ -642,7 +651,7 @@ async function updateProject(project, promptEnv = false) {
       const packageManager = config.packageManager || "npm";
       const installCommand =
         packageManager === "bun" ? "bun install" : "npm install";
-      execSync(`cd ${repoPath} && ${installCommand}`, {
+      execSync(`cd ${repoPath}/${project.root_dir} && ${installCommand}`, {
         stdio: "inherit",
       });
 
@@ -650,7 +659,7 @@ async function updateProject(project, promptEnv = false) {
       spinner.update({ text: " Building the project...\n" });
       const buildCommand =
         packageManager === "bun" ? "bun run build" : "npm run build";
-      execSync(`cd ${repoPath} && ${buildCommand}`, {
+      execSync(`cd ${repoPath}/${project.root_dir} && ${buildCommand}`, {
         stdio: "inherit",
       });
 
@@ -659,17 +668,17 @@ async function updateProject(project, promptEnv = false) {
 
       // Check if the PM2 instance exists
       try {
-        execSync(`cd ${repoPath} && pm2 describe ${project.repo}`, {
+        execSync(`cd ${repoPath}/${project.root_dir} && pm2 describe ${project.app_name || project.repo}`, {
           stdio: "ignore",
         });
         // If it exists, restart
-        execSync(`cd ${repoPath} && pm2 restart ${project.repo}`, {
+        execSync(`cd ${repoPath}/${project.root_dir} && pm2 restart ${project.app_name || project.repo}`, {
           stdio: "inherit",
         });
       } catch (error) {
         // If it doesn't exist, start it on its port
         execSync(
-          `cd ${repoPath} && pm2 start npm --name "${project.repo}" -- start -- --port ${project.port}`,
+          `cd ${repoPath}/${project.root_dir} && pm2 start npm --name "${project.app_name || project.repo}" -- start -- --port ${project.port}`,
           {
             stdio: "inherit",
           }
@@ -1135,7 +1144,7 @@ program
   .option("--port <port>", "Port to deploy the application")
   .action(async (cmd) => {
     try {
-      let { owner, repo, port } = cmd;
+      let { owner, repo, app_name, root_dir, build_cmd, port } = cmd;
       // Read stored username from config
       let defaultOwner = owner;
       if (config.github && config.github.username) {
@@ -1158,6 +1167,24 @@ program
           },
           {
             type: "input",
+            name: "app_name",
+            message: "Enter a unique name for your application:",
+            when: () => !app_name,
+          },
+          {
+            type: "input",
+            name: "root_dir",
+            message: "Enter the (optional) relative root dir (eg: src):",
+            when: () => !root_dir,
+          },
+          {
+            type: "input",
+            name: "build_cmd",
+            message: "Enter the build command (eg: yarn; yarn build):",
+            when: () => !build_cmd,
+          },
+          {
+            type: "input",
             name: "port",
             message: "Enter the port to deploy the application:",
             when: () => !port,
@@ -1173,6 +1200,9 @@ program
 
         owner = owner || answers.owner;
         repo = repo || answers.repo;
+        app_name = app_name || answers.app_name;
+        root_dir = root_dir || answers.root_dir;
+        build_cmd = build_cmd || answers.build_cmd;
         port = port || answers.port;
       }
 
@@ -1409,13 +1439,14 @@ program
 
       const installCommand =
         packageManager === "bun" ? "bun install" : "npm install";
-      const buildCommand =
-        packageManager === "bun" ? "bun run build" : "npm run build";
-      const startCommand = `pm2 start npm --name "${repo}" -- start -- --port ${port}`;
+      const buildCommand = build_cmd || packageManager === "bun" ? "bun run build" : "npm run build";
+      const startCommand = `pm2 start npm --name "${app_name || repo}" -- start -- --port ${port}`;
 
       // Install dependencies and build the project
       try {
-        execSync(`cd ${projectsDir}/${repo} && ${installCommand}`, {
+        if () {
+        }
+        execSync(`cd ${projectsDir}/${repo}/${root_dir} && ${installCommand}`, {
           stdio: "inherit",
         });
       } catch (error) {
@@ -1426,7 +1457,7 @@ program
       }
 
       try {
-        execSync(`cd ${projectsDir}/${repo} && ${buildCommand}`, {
+        execSync(`cd ${projectsDir}/${repo}/${root_dir} && ${buildCommand}`, {
           stdio: "inherit",
         });
       } catch (error) {
@@ -1451,15 +1482,15 @@ program
         process.exit(1);
       }
 
-      execSync(`cd ${projectsDir}/${repo} && ${startCommand}`, {
+      execSync(`cd ${projectsDir}/${repo}/${root_dir} && ${startCommand}`, {
         stdio: "inherit",
       });
 
       // Set up the webhook for the repository
-      const webhookId = await setupWebhook(`${owner}/${repo}`);
+      const webhookId = await setupWebhook(`${owner}/${app_name || repo}`);
 
       // Save the webhook ID to the project configuration
-      updateProjectsConfig({ pid, owner, repo, port, webhookId });
+      updateProjectsConfig({ pid, owner, repo, app_name, root_dir, build_cmd, port, webhookId });
 
       log(`Project deployed successfully on port ${port}`);
     } catch (error) {
@@ -1474,6 +1505,9 @@ const status = () => {
       chalk.cyan.bold("PID"),
       chalk.cyan.bold("Owner"),
       chalk.cyan.bold("Repository"),
+      chalk.cyan.bold("App Name"),
+      chalk.cyan.bold("Root Dir"),
+      chalk.cyan.bold("Build Command"),
       chalk.cyan.bold("Port"),
       chalk.cyan.bold("Status"),
       chalk.cyan.bold("Last Updated"),
@@ -1482,7 +1516,7 @@ const status = () => {
       head: ["cyan", "bold"],
     },
     wordWrap: true,
-    colWidths: [10, 15, 15, 10, 15, 20],
+    colWidths: [10, 15, 15, 15, 15, 15, 10, 15, 20],
   });
 
   config.projects.forEach((project) => {
@@ -1502,6 +1536,9 @@ const status = () => {
       chalk.yellow.bold(project.pid),
       chalk.white(project.owner),
       chalk.white(project.repo),
+      chalk.white(project.app_name),
+      chalk.white(project.root_dir),
+      chalk.white(project.build_cmd),
       chalk.greenBright.bold(project.port),
       pm2Status === "online" ? chalk.green(pm2Status) : chalk.red(pm2Status),
       chalk.white(
@@ -1559,7 +1596,7 @@ program
           type: "list",
           name: "selectedProject",
           message: "Select a project to manage:",
-          choices: config.projects.map((project) => project.repo),
+          choices: config.projects.map((project) => project.app_name || project.repo),
         },
         {
           type: "list",
@@ -1569,7 +1606,7 @@ program
         },
       ]);
 
-      const project = config.projects.find((p) => p.repo === selectedProject);
+      const project = config.projects.find((p) => selectedProject === (p.app_name || p.repo));
 
       if (!project) {
         log(chalk.red("Error: Selected project not found."));
@@ -1602,15 +1639,15 @@ program
             await sleep(1000);
 
             const project = config.projects.find(
-              (p) => p.repo === selectedProject
+              (p) => selectedProject === (p.app_name || p.repo)
             );
             if (project) {
               const repoPath = `${projectsDir}/${project.repo}`;
 
               // Stop and delete the project from PM2 if it exists
               try {
-                execSync(`pm2 stop ${project.repo}`, { stdio: "ignore" });
-                execSync(`pm2 del ${project.repo}`, { stdio: "ignore" });
+                execSync(`pm2 stop ${project.app_name || project.repo}`, { stdio: "ignore" });
+                execSync(`pm2 del ${project.app_name || project.repo}`, { stdio: "ignore" });
               } catch (error) {
                 log(
                   chalk.yellow(
@@ -1623,12 +1660,12 @@ program
               execSync(`rm -rf ${repoPath}`);
 
               log(
-                chalk.green(`\n✔ Project ${project.repo} deleted successfully.`)
+                chalk.green(`\n✔ Project ${project.app_name || project.repo} deleted successfully.`)
               );
 
               // Remove the project from the configuration file
               config.projects = config.projects.filter(
-                (p) => p.repo !== selectedProject
+                (p) => (p.app_name || p.repo) !== selectedProject
               );
 
               // Remove associated domains
@@ -1657,7 +1694,7 @@ program
               // Remove webhook if it exists
               if (project.webhookId) {
                 await removeWebhook(
-                  `${project.owner}/${project.repo}`,
+                  `${project.owner}/${project.app_name || project.repo}`,
                   project.webhookId
                 );
               }
@@ -1678,15 +1715,15 @@ program
           console.error(chalk.red(`Error: ${error.message}`));
         }
       } else {
-        const pm2Command = `pm2 ${action} ${project.repo}`;
+        const pm2Command = `pm2 ${action} ${project.app_name || project.repo}`;
 
         try {
           execSync(pm2Command, { stdio: "inherit" });
-          log(chalk.green(`Project ${project.repo} ${action}ed successfully.`));
+          log(chalk.green(`Project ${project.app_name || project.repo} ${action}ed successfully.`));
         } catch (error) {
           console.error(
             chalk.red(
-              `Failed to ${action} project ${project.repo}: ${error.message}`
+              `Failed to ${action} project ${project.app_name || project.repo}: ${error.message}`
             )
           );
         }
