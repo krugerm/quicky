@@ -1057,6 +1057,7 @@ program
         process.exit(1);
       }
 
+      const existingProject = config.projects.find((p) => p.app_name === app_name);
       if (existingProject) {
         log(
           chalk.yellowBright(
