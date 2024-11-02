@@ -515,8 +515,8 @@ async function removeWebhook(repo, webhookId) {
 async function updateProject(project, promptEnv = false) {
   try {
     const git = simpleGit();
-    const repoPath = `${projectsDir}/${project.repo}`;
-    const tempPath = `${tempDir}/${project.repo}`;
+    const repoPath = `${projectsDir}/${project.app_name || project.repo}`;
+    const tempPath = `${tempDir}/${project.app_name || project.repo}`;
 
     const spinner = createSpinner("Updating the project...").start();
     await sleep(1000);
@@ -621,7 +621,7 @@ async function updateProject(project, promptEnv = false) {
       saveConfig(config);
 
       spinner.success({
-        text: ` Project ${chalk.green.bold(project.repo)} updated successfully.`,
+        text: ` Project ${chalk.green.bold(project.app_name || project.repo)} updated successfully.`,
       });
     } catch (error) {
       spinner.error({
@@ -1059,12 +1059,12 @@ program
         process.exit(1);
       }
 
-      const existingProject = config.projects.find((p) => p.repo === repo);
+      const existingProject = config.projects.find((p) => (p.app_name || p.repo) === (app_name || repo));
 
       if (existingProject) {
         log(
           chalk.yellowBright(
-            `\nProject ${chalk.bold(repo)} already exists. \nUse the ${chalk.bold(
+            `\nProject ${chalk.bold(app_name || repo)} already exists. \nUse the ${chalk.bold(
               "manage"
             )} command to manage the project or the ${chalk.bold("list")} command to view all your deployed projects.\n`
           )
@@ -1116,11 +1116,11 @@ program
       port = await getAvailablePort(port);
 
       const git = simpleGit();
-      const repoPath = `${projectsDir}/${repo}`;
+      const repoPath = `${projectsDir}/${app_name || repo}`;
 
       // Check if the directory already exists and is not empty
       if (fs.existsSync(repoPath) && fs.readdirSync(repoPath).length > 0) {
-        const existingProject = config.projects.find((p) => p.repo === repo);
+        const existingProject = config.projects.find((p) => (p.app_name || p.repo) === (app_name || repo));
         if (!existingProject) {
           log(`⚠️  Directory ${chalk.hex("#FFA500").bold(repoPath)} exists and is not linked to any project.`);
           const { deleteFolder } = await inquirer.prompt([
@@ -1171,7 +1171,7 @@ program
       ]);
 
       if (addEnv) {
-        const envFilePath = `${projectsDir}/${repo}/.env`;
+        const envFilePath = `${projectsDir}/${app_name || repo}/.env`;
         fs.writeFileSync(envFilePath, "# Add your environment variables below\n", { flag: "wx" });
         execSync(`nano ${envFilePath}`, { stdio: "inherit" });
       }
@@ -1243,7 +1243,7 @@ program
 
       // Install dependencies and build the project
       try {
-        execSync(`cd ${projectsDir}/${repo}/${root_dir} && ${installCommand}`, {
+        execSync(`cd ${projectsDir}/${app_name || repo}/${root_dir} && ${installCommand}`, {
           stdio: "inherit",
         });
       } catch (error) {
@@ -1252,7 +1252,7 @@ program
       }
 
       try {
-        execSync(`cd ${projectsDir}/${repo}/${root_dir} && ${buildCommand}`, {
+        execSync(`cd ${projectsDir}/${app_name || repo}/${root_dir} && ${buildCommand}`, {
           stdio: "inherit",
         });
       } catch (error) {
@@ -1271,7 +1271,7 @@ program
         process.exit(1);
       }
 
-      execSync(`cd ${projectsDir}/${repo}/${root_dir} && ${startCommand}`, {
+      execSync(`cd ${projectsDir}/${app_name || repo}/${root_dir} && ${startCommand}`, {
         stdio: "inherit",
       });
 
@@ -1313,7 +1313,7 @@ const status = () => {
     try {
       const pm2List = execSync(`pm2 jlist`, { encoding: "utf-8" });
       const pm2Instances = JSON.parse(pm2List);
-      const instance = pm2Instances.find((inst) => inst.name === project.repo);
+      const instance = pm2Instances.find((inst) => inst.name === (project.app_name || project.repo));
       if (instance) {
         pm2Status = instance.pm2_env.status;
       }
@@ -1423,14 +1423,14 @@ program
 
             const project = config.projects.find((p) => selectedProject === (p.app_name || p.repo));
             if (project) {
-              const repoPath = `${projectsDir}/${project.repo}`;
+              const repoPath = `${projectsDir}/${project.app_name || project.repo}`;
 
               // Stop and delete the project from PM2 if it exists
               try {
                 execSync(`pm2 stop ${project.app_name || project.repo}`, { stdio: "ignore" });
                 execSync(`pm2 del ${project.app_name || project.repo}`, { stdio: "ignore" });
               } catch (error) {
-                log(chalk.yellow(`\nProject ${project.repo} is not running on PM2. Skipping...`));
+                log(chalk.yellow(`\nProject ${project.app_name || project.repo} is not running on PM2. Skipping...`));
               }
 
               // Remove the project directory
@@ -1582,7 +1582,7 @@ async function handleAddDomain(projects) {
         type: "list",
         name: "project",
         message: "Select a project to associate the domain with:",
-        choices: projects.map((p) => p.repo),
+        choices: projects.map((p) => p.app_name || p.repo),
       },
       {
         type: "input",
@@ -1596,7 +1596,7 @@ async function handleAddDomain(projects) {
       },
     ]);
 
-    const selectedProject = projects.find((p) => p.repo === project);
+    const selectedProject = projects.find((p) => (p.app_name || p.repo) === project);
     if (!selectedProject) {
       log(chalk.red("Error: Selected project not found."));
       return;
@@ -1619,7 +1619,9 @@ async function handleAddDomain(projects) {
 
     config.domains.push({ pid: projectPid, domain });
     saveConfig(config);
-    log(chalk.green(`Domain ${domain} added successfully to project ${selectedProject.repo}.`));
+    log(
+      chalk.green(`Domain ${domain} added successfully to project ${selectedProject.app_name || selectedProject.repo}.`)
+    );
     log(chalk.green(`You can now access your project at https://${domain}`));
     log(
       `Please make sure your domain is pointing to this server's IP address. It may take up to 48 hours for DNS changes to take effect.`
@@ -1637,11 +1639,11 @@ async function handleRemoveDomain(projects) {
         type: "list",
         name: "project",
         message: "Select the project you want to remove a domain from:",
-        choices: projects.map((p) => p.repo),
+        choices: projects.map((p) => p.app_name || p.repo),
       },
     ]);
 
-    const selectedProject = projects.find((p) => p.repo === project);
+    const selectedProject = projects.find((p) => p.app_name || p.repo === project);
     if (!selectedProject) {
       log(chalk.red("Error: Selected project not found."));
       return;
@@ -1705,7 +1707,11 @@ async function handleListDomains(projects) {
     projects.forEach((project) => {
       const projectDomains = config.domains.filter((d) => d.pid === project.pid);
       projectDomains.forEach((domain) => {
-        table.push([chalk.white(project.repo), chalk.blue(domain.domain), chalk.white(project.port)]);
+        table.push([
+          chalk.white(project.app_name || project.repo),
+          chalk.blue(domain.domain),
+          chalk.white(project.port),
+        ]);
       });
     });
 
